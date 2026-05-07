@@ -126,6 +126,11 @@
 #define ulSSI_FREQUENCY                        ( 3500000UL )
 
 /*-----------------------------------------------------------*/
+typedef struct {
+    uint16_t payloadLength;
+    uint8_t  payload[16];
+} DoIPPacket_t;
+/*-----------------------------------------------------------*/
 
 /*
  * The display is written two by more than one task so is controlled by a
@@ -189,8 +194,8 @@ int main( void )
 
     /* Create the queue used by the OLED task. */
     xOLEDQueue = xQueueCreate( mainOLED_QUEUE_SIZE, sizeof( char * ) );
-    xEthToArpQueue = xQueueCreate( 5, sizeof( int ) );
-    xArpToIpQueue = xQueueCreate( 5, sizeof( int ) );
+    xEthToArpQueue = xQueueCreate( 5, sizeof( DoIPPacket_t ) );
+    xArpToIpQueue = xQueueCreate( 5, sizeof( DoIPPacket_t ) );
 
 
     /* Start the tasks defined within this file/specific to this demo. */
@@ -249,33 +254,35 @@ static void prvPrintString( const char * pcString )
 }
 /*-----------------------------------------------------------*/
 void ethernetTask( void *pvParameters ) {
-    int packetLen = 64;
+    DoIPPacket_t pkt;
+    pkt.payloadLength=64;
+    strcpy( (char *)pkt.payload, "Hello DoIP" );
     while(1) {
-        xQueueSend( xEthToArpQueue, &packetLen, 0 );
+        xQueueSend( xEthToArpQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
 }
 /*-----------------------------------------------------------*/
 void arpTask( void *pvParameters ) {
-    int received;
+    DoIPPacket_t pkt;
     static char msg[25];
     const char *pmsg = msg;
     while(1) {
-        xQueueReceive( xEthToArpQueue, &received, portMAX_DELAY );
-        sprintf(msg, "ARP got: %d", received);
+        xQueueReceive( xEthToArpQueue, &pkt, portMAX_DELAY );
+        sprintf(msg, "ARP got: %s ",(char *)pkt.payload);
         xQueueSend(xOLEDQueue, &pmsg, 0);
-        xQueueSend( xArpToIpQueue, &received, 0 );
+        xQueueSend( xArpToIpQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
 }
 /*-----------------------------------------------------------*/
 void ipTask( void *pvParameters ) {
-    int received;
+    DoIPPacket_t pkt;
     static char msg[25];
     const char *pmsg = msg;
     while(1) {
-        xQueueReceive( xArpToIpQueue, &received, portMAX_DELAY );
-        sprintf(msg, "IP got: %d", received);
+        xQueueReceive( xArpToIpQueue, &pkt, portMAX_DELAY );
+        sprintf(msg, "IP got: %s ", (char*)pkt.payload);
         xQueueSend( xOLEDQueue, &pmsg, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
