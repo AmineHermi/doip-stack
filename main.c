@@ -126,6 +126,9 @@
 #define ulSSI_FREQUENCY                        ( 3500000UL )
 
 /*-----------------------------------------------------------*/
+#define DOIP_SERVICE_ROUTING_ACTIVATION   0x0001
+#define DOIP_SERVICE_DIAGNOSTIC_MESSAGE   0x0002
+/*-----------------------------------------------------------*/
 typedef struct {
     uint8_t  protocolVersion;
     uint8_t  inverseVersion;
@@ -264,6 +267,10 @@ void ethernetTask( void *pvParameters ) {
     pkt.payloadLength=10;
     strcpy( (char *)pkt.payload, "Hello DoIP" );
     while(1) {
+        pkt.serviceID       = 0x0001;
+        xQueueSend( xEthToArpQueue, &pkt, 0 );
+        vTaskDelay( pdMS_TO_TICKS( 1000 ) );
+        pkt.serviceID       = 0x0002;
         xQueueSend( xEthToArpQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
@@ -283,7 +290,7 @@ void arpTask( void *pvParameters ) {
         }
         xQueueSend(xOLEDQueue, &pmsg, 0);
         xQueueSend( xArpToIpQueue, &pkt, 0 );
-        vTaskDelay( pdMS_TO_TICKS( 1000 ) );
+        
     }
 }
 /*-----------------------------------------------------------*/
@@ -293,7 +300,16 @@ void ipTask( void *pvParameters ) {
     const char *pmsg = msg;
     while(1) {
         xQueueReceive( xArpToIpQueue, &pkt, portMAX_DELAY );
-        sprintf(msg, "IP got: %s ", (char*)pkt.payload);
+         if(pkt.serviceID == 0x0001 ) {
+            sprintf(msg, "Routing Activation");
+        }
+        else if(pkt.serviceID == 0x0002 ) {
+            sprintf(msg, "Diagnostic Msg");
+        }
+        else{
+            sprintf(msg, "Unknown");
+        }
+        
         xQueueSend( xOLEDQueue, &pmsg, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
