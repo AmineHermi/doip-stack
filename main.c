@@ -163,7 +163,7 @@ static void prvPrintString( const char * pcString );
 /* The queue used to send messages to the OLED task. */
 static QueueHandle_t xOLEDQueue;
 static QueueHandle_t xEthToArpQueue;
-
+static QueueHandle_t xArpToIpQueue;
 /* The welcome text. */
 const char * const pcWelcomeMessage = "   www.FreeRTOS.org";
 
@@ -190,6 +190,8 @@ int main( void )
     /* Create the queue used by the OLED task. */
     xOLEDQueue = xQueueCreate( mainOLED_QUEUE_SIZE, sizeof( char * ) );
     xEthToArpQueue = xQueueCreate( 5, sizeof( int ) );
+    xArpToIpQueue = xQueueCreate( 5, sizeof( int ) );
+
 
     /* Start the tasks defined within this file/specific to this demo. */
     xTaskCreate( prvOLEDTask, "OLED", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
@@ -262,14 +264,19 @@ void arpTask( void *pvParameters ) {
         xQueueReceive( xEthToArpQueue, &received, portMAX_DELAY );
         sprintf(msg, "ARP got: %d", received);
         xQueueSend(xOLEDQueue, &pmsg, 0);
+        xQueueSend( xArpToIpQueue, &received, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
 }
 /*-----------------------------------------------------------*/
 void ipTask( void *pvParameters ) {
-    const char *msg = "ipTask";
+    int received;
+    static char msg[25];
+    const char *pmsg = msg;
     while(1) {
-        xQueueSend( xOLEDQueue, &msg, 0 );
+        xQueueReceive( xArpToIpQueue, &received, portMAX_DELAY );
+        sprintf(msg, "IP got: %d", received);
+        xQueueSend( xOLEDQueue, &pmsg, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
 }
