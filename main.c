@@ -127,6 +127,9 @@
 
 /*-----------------------------------------------------------*/
 typedef struct {
+    uint8_t  protocolVersion;
+    uint8_t  inverseVersion;
+    uint16_t serviceID;
     uint16_t payloadLength;
     uint8_t  payload[16];
 } DoIPPacket_t;
@@ -255,7 +258,10 @@ static void prvPrintString( const char * pcString )
 /*-----------------------------------------------------------*/
 void ethernetTask( void *pvParameters ) {
     DoIPPacket_t pkt;
-    pkt.payloadLength=64;
+    pkt.protocolVersion = 0x02;
+    pkt.inverseVersion  = 0xFD;
+    pkt.serviceID       = 0x0001;
+    pkt.payloadLength=10;
     strcpy( (char *)pkt.payload, "Hello DoIP" );
     while(1) {
         xQueueSend( xEthToArpQueue, &pkt, 0 );
@@ -269,7 +275,12 @@ void arpTask( void *pvParameters ) {
     const char *pmsg = msg;
     while(1) {
         xQueueReceive( xEthToArpQueue, &pkt, portMAX_DELAY );
-        sprintf(msg, "ARP got: %s ",(char *)pkt.payload);
+        if(pkt.protocolVersion == 0x02 ) {
+            sprintf(msg, "ARP: sID=0x%04X", pkt.serviceID);
+        }
+        else{
+            sprintf(msg, "ARP: bad version");
+        }
         xQueueSend(xOLEDQueue, &pmsg, 0);
         xQueueSend( xArpToIpQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
