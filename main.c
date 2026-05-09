@@ -133,7 +133,9 @@ typedef struct {
     uint8_t  protocolVersion;
     uint8_t  inverseVersion;
     uint16_t serviceID;
-    uint16_t payloadLength;
+    uint32_t payloadLength;
+    uint8_t  udsServiceID;
+    uint16_t udsDataID;
     uint8_t  payload[16];
 } DoIPPacket_t;
 /*-----------------------------------------------------------*/
@@ -263,14 +265,16 @@ void ethernetTask( void *pvParameters ) {
     DoIPPacket_t pkt;
     pkt.protocolVersion = 0x02;
     pkt.inverseVersion  = 0xFD;
-    pkt.serviceID       = 0x0001;
-    pkt.payloadLength=10;
-    strcpy( (char *)pkt.payload, "Hello DoIP" );
+    pkt.serviceID       = 0x8001;
+    pkt.payloadLength   =3;
+    pkt.udsServiceID    =0x22;   
+    
+    //strcpy( (char *)pkt.payload, "Hello DoIP" );
     while(1) {
-        pkt.serviceID       = 0x0001;
+        pkt.udsDataID       =0x0401;
         xQueueSend( xEthToArpQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
-        pkt.serviceID       = 0x0002;
+        pkt.udsDataID       =0x0402;
         xQueueSend( xEthToArpQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
@@ -300,14 +304,14 @@ void ipTask( void *pvParameters ) {
     const char *pmsg = msg;
     while(1) {
         xQueueReceive( xArpToIpQueue, &pkt, portMAX_DELAY );
-         if(pkt.serviceID == 0x0001 ) {
-            sprintf(msg, "Routing Activation");
+         if(pkt.udsDataID == 0x0401 ) {
+            sprintf(msg, "SW Ver:1.0");
         }
-        else if(pkt.serviceID == 0x0002 ) {
-            sprintf(msg, "Diagnostic Msg");
+        else if(pkt.udsDataID == 0x0402 ) {
+            sprintf(msg, "HW Ver:P200C2");
         }
         else{
-            sprintf(msg, "Unknown");
+            sprintf(msg, "UnknownDID");
         }
         
         xQueueSend( xOLEDQueue, &pmsg, 0 );
