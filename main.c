@@ -303,18 +303,40 @@ void udsHandlerTask( void *pvParameters ) {
 /*-----------------------------------------------------------*/
 void diagnosticTask( void *pvParameters ) {
     DoIPPacket_t *pkt;
+    uint8_t response[8];
+    int responseLen,i,offset;
     static char msg[25];
     const char *pmsg = msg;
     while(1) {
         xQueueReceive( xUDSToDiagQueue, &pkt, portMAX_DELAY );
+        offset=0;
          if(pkt->udsDataID == 0x0401 ) {
-            sprintf(msg, "SW Ver:1.0");
+            response[0] = 0x62;
+            response[1] = 0x04;
+            response[2] = 0x01;
+            response[3] = 0x31;
+            response[4] = 0x2E;
+            response[5] = 0x30;
+            responseLen=6;
+            for(i = 0; i < responseLen; i++) {
+
+                offset += sprintf(msg + offset, "%02X ", response[i]);
+            }
+            
         }
         else if(pkt->udsDataID == 0x0402 ) {
             sprintf(msg, "HW Ver:P200C2");
         }
         else{
-            sprintf(msg, "UnknownDID");
+            response[0] = 0x7F;
+            response[1] = 0x22;
+            response[2] = 0x31;
+            responseLen=3;
+            for(i = 0; i < responseLen; i++) {
+                
+                offset += sprintf(msg + offset, "%02X ", response[i]);
+            }
+            
         }
         
         xQueueSend( xOLEDQueue, &pmsg, 0 );
