@@ -175,15 +175,17 @@ static void prvPrintString( const char * pcString );
 
 /* The queue used to send messages to the OLED task. */
 static QueueHandle_t xOLEDQueue;
-static QueueHandle_t xEthToArpQueue;
-static QueueHandle_t xArpToIpQueue;
+static QueueHandle_t xDoIPToUDSQueue;
+static QueueHandle_t xUDSToDiagQueue;
 /* The welcome text. */
 const char * const pcWelcomeMessage = "   www.FreeRTOS.org";
 
 /*-----------------------------------------------------------*/
-static void ethernetTask( void * pvParameters );
-static void arpTask( void * pvParameters );
-static void ipTask( void * pvParameters );
+static void doipReceiverTask( void * pvParameters );
+static void udsHandlerTask( void * pvParameters );
+static void diagnosticTask( void * pvParameters );
+/*-----------------------------------------------------------*/
+volatile uint8_t currentSession = 0x01;
 /*-----------------------------------------------------------*/
 
 /*************************************************************************
@@ -202,15 +204,15 @@ int main( void )
 
     /* Create the queue used by the OLED task. */
     xOLEDQueue = xQueueCreate( mainOLED_QUEUE_SIZE, sizeof( char * ) );
-    xEthToArpQueue = xQueueCreate( 5, sizeof( DoIPPacket_t ) );
-    xArpToIpQueue = xQueueCreate( 5, sizeof( DoIPPacket_t ) );
+    xDoIPToUDSQueue = xQueueCreate( 5, sizeof( DoIPPacket_t * ) );
+    xUDSToDiagQueue = xQueueCreate( 5, sizeof( DoIPPacket_t * ) );
 
 
     /* Start the tasks defined within this file/specific to this demo. */
     xTaskCreate( prvOLEDTask, "OLED", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
-    xTaskCreate( ethernetTask, "etask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
-    xTaskCreate( arpTask, "atask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
-    xTaskCreate( ipTask, "itask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
+    xTaskCreate( doipReceiverTask, "dRask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
+    xTaskCreate( udsHandlerTask, "uHask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
+    xTaskCreate( diagnosticTask, "dtask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
 
     /* Uncomment the following line to configure the high frequency interrupt
      * used to measure the interrupt jitter time.
@@ -261,53 +263,54 @@ static void prvPrintString( const char * pcString )
     }
 }
 /*-----------------------------------------------------------*/
-void ethernetTask( void *pvParameters ) {
-    DoIPPacket_t pkt;
-    pkt.protocolVersion = 0x02;
-    pkt.inverseVersion  = 0xFD;
-    pkt.serviceID       = 0x8001;
-    pkt.payloadLength   =3;
-    pkt.udsServiceID    =0x22;   
+void doipReceiverTask( void *pvParameters ) {
+    static DoIPPacket_t packet;
+    static DoIPPacket_t *pkt=&packet; 
+    pkt->protocolVersion = 0x02;
+    pkt->inverseVersion  = 0xFD;
+    pkt->serviceID       = 0x8001;
+    pkt->payloadLength   =3;
+    pkt->udsServiceID    =0x22;   
     
     //strcpy( (char *)pkt.payload, "Hello DoIP" );
     while(1) {
-        pkt.udsDataID       =0x0401;
-        xQueueSend( xEthToArpQueue, &pkt, 0 );
+        pkt->udsDataID       =0x0401;
+        xQueueSend( xDoIPToUDSQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
-        pkt.udsDataID       =0x0402;
-        xQueueSend( xEthToArpQueue, &pkt, 0 );
+        pkt->udsDataID       =0x0402;
+        xQueueSend( xDoIPToUDSQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
 }
 /*-----------------------------------------------------------*/
-void arpTask( void *pvParameters ) {
-    DoIPPacket_t pkt;
+void udsHandlerTask( void *pvParameters ) {
+    DoIPPacket_t *pkt;
     static char msg[25];
     const char *pmsg = msg;
     while(1) {
-        xQueueReceive( xEthToArpQueue, &pkt, portMAX_DELAY );
-        if(pkt.protocolVersion == 0x02 ) {
-            sprintf(msg, "ARP: sID=0x%04X", pkt.serviceID);
+        xQueueReceive( xDoIPToUDSQueue, &pkt, portMAX_DELAY );
+        if(pkt->protocolVersion == 0x02 ) {
+            sprintf(msg, "UDS: sID=0x%04X", pkt->serviceID);
         }
         else{
-            sprintf(msg, "ARP: bad version");
+            sprintf(msg, "UDS: bad version");
         }
         xQueueSend(xOLEDQueue, &pmsg, 0);
-        xQueueSend( xArpToIpQueue, &pkt, 0 );
+        xQueueSend( xUDSToDiagQueue, &pkt, 0 );
         
     }
 }
 /*-----------------------------------------------------------*/
-void ipTask( void *pvParameters ) {
-    DoIPPacket_t pkt;
+void diagnosticTask( void *pvParameters ) {
+    DoIPPacket_t *pkt;
     static char msg[25];
     const char *pmsg = msg;
     while(1) {
-        xQueueReceive( xArpToIpQueue, &pkt, portMAX_DELAY );
-         if(pkt.udsDataID == 0x0401 ) {
+        xQueueReceive( xUDSToDiagQueue, &pkt, portMAX_DELAY );
+         if(pkt->udsDataID == 0x0401 ) {
             sprintf(msg, "SW Ver:1.0");
         }
-        else if(pkt.udsDataID == 0x0402 ) {
+        else if(pkt->udsDataID == 0x0402 ) {
             sprintf(msg, "HW Ver:P200C2");
         }
         else{
