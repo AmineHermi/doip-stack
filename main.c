@@ -270,14 +270,22 @@ void doipReceiverTask( void *pvParameters ) {
     pkt->inverseVersion  = 0xFD;
     pkt->serviceID       = 0x8001;
     pkt->payloadLength   =3;
-    pkt->udsServiceID    =0x22;   
+       
     
     //strcpy( (char *)pkt.payload, "Hello DoIP" );
     while(1) {
+        pkt->udsServiceID    =0x22;
         pkt->udsDataID       =0x0401;
         xQueueSend( xDoIPToUDSQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
+
+        pkt->udsServiceID    =0x22;
         pkt->udsDataID       =0x0402;
+        xQueueSend( xDoIPToUDSQueue, &pkt, 0 );
+        vTaskDelay( pdMS_TO_TICKS( 1000 ) );
+
+        pkt->udsServiceID    =0x11;
+        pkt->udsDataID       =0x0000;
         xQueueSend( xDoIPToUDSQueue, &pkt, 0 );
         vTaskDelay( pdMS_TO_TICKS( 1000 ) );
     }
@@ -310,6 +318,17 @@ void diagnosticTask( void *pvParameters ) {
     while(1) {
         xQueueReceive( xUDSToDiagQueue, &pkt, portMAX_DELAY );
         offset=0;
+        if(pkt->udsServiceID == 0x11) {
+            response[0] = 0x51;
+            response[1] = 0x01;
+            responseLen=2;
+            for(i = 0; i < responseLen; i++) {
+
+                offset += sprintf(msg + offset, "%02X ", response[i]);
+        } 
+        }
+        else if(pkt->udsServiceID == 0x22) {
+    
          if(pkt->udsDataID == 0x0401 ) {
             response[0] = 0x62;
             response[1] = 0x04;
@@ -342,6 +361,8 @@ void diagnosticTask( void *pvParameters ) {
                 offset += sprintf(msg + offset, "%02X ", response[i]);
             }
         }
+        
+        
         else{
             response[0] = 0x7F;
             response[1] = 0x22;
@@ -354,10 +375,13 @@ void diagnosticTask( void *pvParameters ) {
             
         }
         
+        }  
         xQueueSend( xOLEDQueue, &pmsg, 0 );
-        vTaskDelay( pdMS_TO_TICKS( 1000 ) );
+        vTaskDelay( pdMS_TO_TICKS( 1000 ) );  
     }
-}
+        
+    }
+
 /*-----------------------------------------------------------*/
 
 void prvOLEDTask( void * pvParameters )
