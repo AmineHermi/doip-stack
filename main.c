@@ -111,7 +111,7 @@
 #define mainOLED_QUEUE_SIZE                    ( 3 )
 
 /* Dimensions the buffer into which the jitter time is written. */
-#define mainMAX_MSG_LEN                        25
+#define mainMAX_MSG_LEN                        120
 
 /* The period of the system clock in nano seconds.  This is used to calculate
  * the jitter time in nano seconds. */
@@ -303,9 +303,9 @@ void udsHandlerTask( void *pvParameters ) {
 /*-----------------------------------------------------------*/
 void diagnosticTask( void *pvParameters ) {
     DoIPPacket_t *pkt;
-    uint8_t response[8];
+    uint8_t response[40];
     int responseLen,i,offset;
-    static char msg[25];
+    static char msg[110];
     const char *pmsg = msg;
     while(1) {
         xQueueReceive( xUDSToDiagQueue, &pkt, portMAX_DELAY );
@@ -314,10 +314,11 @@ void diagnosticTask( void *pvParameters ) {
             response[0] = 0x62;
             response[1] = 0x04;
             response[2] = 0x01;
+            memset(&response[3], 0x20, 32);
             response[3] = 0x31;
             response[4] = 0x2E;
             response[5] = 0x30;
-            responseLen=6;
+            responseLen=35;
             for(i = 0; i < responseLen; i++) {
 
                 offset += sprintf(msg + offset, "%02X ", response[i]);
@@ -325,7 +326,21 @@ void diagnosticTask( void *pvParameters ) {
             
         }
         else if(pkt->udsDataID == 0x0402 ) {
-            sprintf(msg, "HW Ver:P200C2");
+            response[0] = 0x62;
+            response[1] = 0x04;
+            response[2] = 0x02;
+            memset(&response[3], 0x20, 32);
+            response[3] = 0x50;
+            response[4] = 0x32;
+            response[5] = 0x30;
+            response[6] = 0x30;
+            response[7] = 0x43;
+            response[8] = 0x32;
+            responseLen=35;
+            for(i = 0; i < responseLen; i++) {
+
+                offset += sprintf(msg + offset, "%02X ", response[i]);
+            }
         }
         else{
             response[0] = 0x7F;
