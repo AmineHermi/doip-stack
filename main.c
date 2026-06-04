@@ -184,6 +184,7 @@ const char * const pcWelcomeMessage = "   www.FreeRTOS.org";
 static void doipReceiverTask( void * pvParameters );
 static void udsHandlerTask( void * pvParameters );
 static void diagnosticTask( void * pvParameters );
+static void testerPresentTask( void * pvParameters );
 /*-----------------------------------------------------------*/
 volatile uint8_t currentSession = 0x01;
 /*-----------------------------------------------------------*/
@@ -213,6 +214,7 @@ int main( void )
     xTaskCreate( doipReceiverTask, "dRask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
     xTaskCreate( udsHandlerTask, "uHask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
     xTaskCreate( diagnosticTask, "dtask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
+    xTaskCreate( testerPresentTask, "tPask", mainOLED_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL );
 
     /* Uncomment the following line to configure the high frequency interrupt
      * used to measure the interrupt jitter time.
@@ -348,16 +350,9 @@ void diagnosticTask( void *pvParameters ) {
             response[0] = 0x62;
             response[1] = 0x04;
             response[2] = 0x02;
-            memset(&response[3], 0x20, 32);
-            response[3] = 0x50;
-            response[4] = 0x32;
-            response[5] = 0x30;
-            response[6] = 0x30;
-            response[7] = 0x43;
-            response[8] = 0x32;
-            responseLen=35;
+            response[3] = 0x06;
+            responseLen = 4;
             for(i = 0; i < responseLen; i++) {
-
                 offset += sprintf(msg + offset, "%02X ", response[i]);
             }
         }
@@ -376,12 +371,50 @@ void diagnosticTask( void *pvParameters ) {
         }
         
         }  
+        else if(pkt->udsServiceID == 0x27) {
+                if(currentSession != 0x01) {
+        // process security access
+                } else {
+                    // return negative response — conditionsNotCorrect
+                    response[0] = 0x7F;
+                    response[1] = 0x27;
+                    response[2] = 0x22;
+                    responseLen = 3;
+                }
+        }
+        else if(pkt->udsServiceID == 0x3E) {
+            
+            response[0] = 0x7E;
+            response[1] = 0x00;
+            responseLen = 2;
+            for(i = 0; i < responseLen; i++) {
+                offset += sprintf(msg + offset, "%02X ", response[i]);
+            }
+        }
         xQueueSend( xOLEDQueue, &pmsg, 0 );
-        vTaskDelay( pdMS_TO_TICKS( 1000 ) );  
-    }
-        
+        vTaskDelay( pdMS_TO_TICKS( 1000 ) ); 
     }
 
+         
+    }
+        
+    
+/*-----------------------------------------------------------*/
+void testerPresentTask( void * pvParameters ){
+    static DoIPPacket_t packet;
+    static DoIPPacket_t *pkt=&packet; 
+    pkt->protocolVersion = 0x02;
+    pkt->inverseVersion  = 0xFD;
+    pkt->serviceID       = 0x8001;
+    pkt->payloadLength   =1;
+    while(1) {
+        pkt->udsServiceID    =0x3E;
+        pkt->udsDataID       =0x00;
+        xQueueSend( xDoIPToUDSQueue, &pkt, 0 );
+        vTaskDelay( pdMS_TO_TICKS( 4000 ) );
+
+}
+}
 /*-----------------------------------------------------------*/
 
 void prvOLEDTask( void * pvParameters )
